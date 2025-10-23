@@ -22,7 +22,10 @@ admin.initializeApp({
 // Middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: [
+      "https://simple-firebase-auth-9089a.web.app",
+      "http://localhost:5173",
+    ],
     credentials: true,
   })
 );
@@ -244,7 +247,7 @@ app.post("/api/users/logout", (req, res) => {
 });
 
 // Add lost/found item (protected) 🆗
-app.post("/api/items", protect, async (req, res) => {
+app.post("/api/inventory", protect, async (req, res) => {
   try {
     if (!validateItemData(req.body)) {
       return res.status(400).json({ message: "Invalid item data" });
@@ -286,7 +289,7 @@ app.post("/api/items", protect, async (req, res) => {
 });
 
 // Get single item (public) 🆗
-app.get("/api/items/:id", async (req, res) => {
+app.get("/api/inventory/:id", async (req, res) => {
   try {
     const id = req.params.id;
     let item;
@@ -311,7 +314,7 @@ app.get("/api/items/:id", async (req, res) => {
 });
 
 // Get all items with filters (public) 🆗
-app.get("/api/items", async (req, res) => {
+app.get("/api/inventory", async (req, res) => {
   try {
     const { type, status, category, location, search } = req.query;
     const query = {};
@@ -351,7 +354,7 @@ app.get("/api/items", async (req, res) => {
 });
 
 // GET API Endpoints for Banner Slides (public)
-app.get("/api/slides", async (req, res) => {
+app.get("/api/highlights", async (req, res) => {
   try {
     const slides = await slidesCollection.find().toArray();
     res.json(slides);
@@ -362,7 +365,7 @@ app.get("/api/slides", async (req, res) => {
 });
 
 // Update item (protected) 🆗
-app.patch("/api/items/:id", protect, async (req, res) => {
+app.patch("/api/inventory/:id", protect, async (req, res) => {
   try {
     let { id } = req.params;
 
@@ -440,7 +443,7 @@ app.patch("/api/items/:id", protect, async (req, res) => {
 });
 
 // Report item recovery (protected) 🆗
-app.post("/api/items/:id/recover", protect, async (req, res) => {
+app.post("/api/inventory/:id/recover", protect, async (req, res) => {
   try {
     const id = req.params.id;
     let item;
@@ -662,7 +665,7 @@ app.patch("/api/recoveries/:id", protect, async (req, res) => {
 });
 
 // Delete item (protected) 🆗
-app.delete("/api/items/:id", protect, async (req, res) => {
+app.delete("/api/inventory/:id", protect, async (req, res) => {
   try {
     const id = req.params.id;
     let item;
