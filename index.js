@@ -31,7 +31,11 @@ app.use(cookieParser());
 
 // Connect to MongoDB
 const client = new MongoClient(MONGO_URI);
-let db, usersCollection, itemsCollection, recoveriesCollection;
+let db,
+  usersCollection,
+  itemsCollection,
+  recoveriesCollection,
+  slidesCollection;
 
 async function connectDB() {
   // Database
@@ -41,6 +45,7 @@ async function connectDB() {
   usersCollection = db.collection("users");
   itemsCollection = db.collection("items");
   recoveriesCollection = db.collection("recoveries");
+  slidesCollection = db.collection("slides");
 
   // Connection test
   console.log("MongoDB connected (native driver)");
@@ -341,6 +346,17 @@ app.get("/api/items", async (req, res) => {
     res.json(items);
   } catch (err) {
     console.error("Error fetching items:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET API Endpoints for Banner Slides (public)
+app.get("/api/slides", async (req, res) => {
+  try {
+    const slides = await slidesCollection.find().toArray();
+    res.json(slides);
+  } catch (err) {
+    console.error("Error fetching slides:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
