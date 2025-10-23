@@ -594,7 +594,7 @@ app.get("/api/my-items", protect, async (req, res) => {
   }
 });
 
-// Update recovery (protected)
+// Update recovery (protected) 🆗
 app.patch("/api/recoveries/:id", protect, async (req, res) => {
   try {
     const { id } = req.params;
@@ -645,7 +645,7 @@ app.patch("/api/recoveries/:id", protect, async (req, res) => {
   }
 });
 
-// Delete item (protected)
+// Delete item (protected) 🆗
 app.delete("/api/items/:id", protect, async (req, res) => {
   try {
     const id = req.params.id;
@@ -666,7 +666,7 @@ app.delete("/api/items/:id", protect, async (req, res) => {
 
     // Check if the user owns the item
     if (
-      item.userId.toString() !== req.user._id.toString() &&
+      (!item.userId || item.userId.toString() !== req.user._id.toString()) &&
       item.contactEmail !== req.user.email
     ) {
       return res
@@ -695,49 +695,6 @@ app.delete("/api/items/:id", protect, async (req, res) => {
   } catch (err) {
     console.error("Error deleting item:", err);
     res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
-// Update your stats endpoint
-app.get("/api/users/:userId/stats", protect, async (req, res) => {
-  try {
-    const userId = req.params.userId;
-
-    // Find user by either MongoDB _id or Firebase uid
-    const user = await usersCollection.findOne({
-      $or: [{ _id: new ObjectId(userId) }, { uid: userId }],
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Verify the requesting user has permission
-    if (user._id.toString() !== req.user._id.toString() && !req.user.isAdmin) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    const [itemsCount, recoveredCount, foundCount] = await Promise.all([
-      itemsCollection.countDocuments({
-        $or: [{ userId: user._id }, { contactEmail: user.email }],
-      }),
-      itemsCollection.countDocuments({
-        $or: [{ userId: user._id }, { contactEmail: user.email }],
-        status: "recovered",
-      }),
-      recoveriesCollection.countDocuments({
-        "recoveredBy.userId": user._id,
-      }),
-    ]);
-
-    res.json({
-      totalItems: itemsCount,
-      recoveredItems: recoveredCount,
-      foundItems: foundCount,
-    });
-  } catch (err) {
-    console.error("Error fetching user stats:", err);
-    res.status(500).json({ message: "Server error" });
   }
 });
 
