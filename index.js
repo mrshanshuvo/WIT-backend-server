@@ -22,7 +22,7 @@ admin.initializeApp({
 // Middleware
 app.use(
   cors({
-    origin: ["https://simple-firebase-auth-9089a.web.app"],
+    origin: ["http://localhost:5173"],
     credentials: true,
   })
 );
@@ -99,31 +99,33 @@ const protect = async (req, res, next) => {
     token = req.headers.authorization.split(" ")[1];
     try {
       const decoded = await admin.auth().verifyIdToken(token);
-      const user = await usersCollection.findOne({ email: decoded.email });
+
+      let user = await usersCollection.findOne({ email: decoded.email });
 
       if (!user) {
-        // Create a new user if not found (optional)
+        // Create new user if not exists
         const newUser = {
           name: decoded.name || "Firebase User",
           email: decoded.email,
           uid: decoded.uid,
+          isAdmin: false,
+          photoURL: decoded.picture || "",
           createdAt: new Date(),
           updatedAt: new Date(),
         };
         const result = await usersCollection.insertOne(newUser);
-        req.user = { ...newUser, _id: result.insertedId };
-        return next();
+        user = { ...newUser, _id: result.insertedId };
       }
 
       req.user = user;
       return next();
     } catch (err) {
-      console.error("Firebase token verification failed:", err);
-      // Continue to check JWT token
+      console.error("Firebase token verification failed:", err.message);
+      // Continue to JWT check
     }
   }
 
-  // 2. Check cookies for JWT token (existing code)
+  // 2. Check cookies for JWT token
   token = req.cookies.token;
   if (!token) {
     return res.status(401).json({ message: "Not authorized, no token" });
@@ -131,9 +133,15 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await usersCollection.findOne({
-      $or: [{ _id: new ObjectId(decoded.userId) }, { uid: decoded.uid }],
-    });
+
+    let user;
+    if (decoded.userId) {
+      user = await usersCollection.findOne({
+        _id: new ObjectId(decoded.userId),
+      });
+    } else if (decoded.uid) {
+      user = await usersCollection.findOne({ uid: decoded.uid });
+    }
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -142,7 +150,7 @@ const protect = async (req, res, next) => {
     req.user = user;
     next();
   } catch (err) {
-    console.error("JWT token invalid:", err);
+    console.error("JWT token invalid:", err.message);
     return res.status(401).json({ message: "Not authorized, token failed" });
   }
 };
@@ -156,15 +164,15 @@ const createToken = (userIdOrUid, isUid = false) => {
 
 // === Routes ===
 
-// Add this to your backend server
+// GET user info from usersCollection
 app.get("/api/users/profile", protect, async (req, res) => {
   try {
-    res.json({
-      name: req.user.name,
-      email: req.user.email,
-      uid: req.user.uid || null,
-      isAdmin: req.user.isAdmin || false,
-    });
+    res.json(
+      // send all data
+      {
+        ...req.user,
+      }
+    );
   } catch (err) {
     console.error("Error fetching profile:", err);
     res.status(500).json({ message: "Server error" });
@@ -241,9 +249,9 @@ app.post("/api/users/login", async (req, res) => {
   }
 });
 
-// Firebase login
+// Firebase login 🆗
 app.post("/api/users/firebase-login", async (req, res) => {
-  const { idToken, name } = req.body;
+  const { idToken, name, photoURL } = req.body;
 
   if (!idToken)
     return res.status(400).json({ message: "No ID token provided" });
@@ -255,17 +263,35 @@ app.post("/api/users/firebase-login", async (req, res) => {
     let user = await usersCollection.findOne({ email });
 
     if (!user) {
+      const now = new Date();
       user = {
         email,
-        name: name || "Firebase User",
+        name: name || "User",
         password: "",
         uid,
+        isAdmin: false,
+        photoURL: photoURL || decodedToken.picture || "",
+        createdAt: now,
+        updatedAt: now,
       };
       const result = await usersCollection.insertOne(user);
       user._id = result.insertedId;
-    } else if (name && user.name !== name) {
-      await usersCollection.updateOne({ _id: user._id }, { $set: { name } });
-      user.name = name;
+    } else {
+      // Update only fields that are provided
+      const updateData = {};
+      if (name && user.name !== name) updateData.name = name;
+      if (photoURL) updateData.photoURL = photoURL; // only overwrite if frontend sends it
+      if (decodedToken.picture && !user.photoURL)
+        updateData.photoURL = decodedToken.picture;
+
+      if (Object.keys(updateData).length > 0) {
+        updateData.updatedAt = new Date();
+        await usersCollection.updateOne(
+          { _id: user._id },
+          { $set: updateData }
+        );
+        user = { ...user, ...updateData };
+      }
     }
 
     const token = createToken(uid, true);
@@ -278,7 +304,7 @@ app.post("/api/users/firebase-login", async (req, res) => {
 
     res.json({
       message: "Logged in with Firebase",
-      user: { email, uid, name: user.name },
+      user,
     });
   } catch (error) {
     console.error("Firebase token verification error:", error);
@@ -286,7 +312,7 @@ app.post("/api/users/firebase-login", async (req, res) => {
   }
 });
 
-// Logout
+// Logout 🆗
 app.post("/api/users/logout", (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
@@ -339,7 +365,7 @@ app.post("/api/items", protect, async (req, res) => {
   }
 });
 
-// Get single item (public)
+// Get single item (public) 🆗
 app.get("/api/items/:id", async (req, res) => {
   try {
     const id = req.params.id;
@@ -364,7 +390,7 @@ app.get("/api/items/:id", async (req, res) => {
   }
 });
 
-// Get all items with filters (public)
+// Get all items with filters (public) 🆗
 app.get("/api/items", async (req, res) => {
   try {
     const { type, status, category, location, search } = req.query;
@@ -701,39 +727,6 @@ app.delete("/api/items/:id", protect, async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
-
-// Profile (protected)
-// User Statistics Endpoint
-// app.get("/api/users/:userId/stats", protect, async (req, res) => {
-//   try {
-//     const userId = req.params.userId;
-
-//     // Verify the user is requesting their own stats or is admin
-//     if (userId !== req.user._id.toString() && !req.user.isAdmin) {
-//       return res.status(403).json({ message: "Unauthorized" });
-//     }
-
-//     const [itemsCount, recoveredCount, foundCount] = await Promise.all([
-//       itemsCollection.countDocuments({ userId: new ObjectId(userId) }),
-//       itemsCollection.countDocuments({
-//         userId: new ObjectId(userId),
-//         status: "recovered",
-//       }),
-//       recoveriesCollection.countDocuments({
-//         "recoveredBy.userId": new ObjectId(userId),
-//       }),
-//     ]);
-
-//     res.json({
-//       totalItems: itemsCount,
-//       recoveredItems: recoveredCount,
-//       foundItems: foundCount,
-//     });
-//   } catch (err) {
-//     console.error("Error fetching user stats:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
 
 // Update your stats endpoint
 app.get("/api/users/:userId/stats", protect, async (req, res) => {
