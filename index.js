@@ -34,35 +34,24 @@ const client = new MongoClient(MONGO_URI);
 let db, usersCollection, itemsCollection, recoveriesCollection;
 
 async function connectDB() {
-  // await client.connect();
+  // Database
   db = client.db("whereisit");
+
+  // Collections
   usersCollection = db.collection("users");
   itemsCollection = db.collection("items");
   recoveriesCollection = db.collection("recoveries");
+
+  // Connection test
   console.log("MongoDB connected (native driver)");
 }
+
 connectDB().catch((err) => {
   console.error("MongoDB connection error:", err);
   process.exit(1);
 });
 
 // Helper: Basic validation functions
-function validateUserData(data) {
-  const { name, email, password } = data;
-  if (
-    !name ||
-    typeof name !== "string" ||
-    !email ||
-    typeof email !== "string" ||
-    !password ||
-    typeof password !== "string" ||
-    password.length < 6
-  ) {
-    return false;
-  }
-  return true;
-}
-
 function validateItemData(data) {
   const { postType, thumbnail, title, description, category, location, date } =
     data;
@@ -164,87 +153,14 @@ const createToken = (userIdOrUid, isUid = false) => {
 
 // === Routes ===
 
-// GET user info from usersCollection
+// GET user info (protected) 🆗
 app.get("/api/users/profile", protect, async (req, res) => {
   try {
-    res.json(
-      // send all data
-      {
-        ...req.user,
-      }
-    );
+    res.json({
+      ...req.user,
+    });
   } catch (err) {
     console.error("Error fetching profile:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Register
-app.post("/api/users/register", async (req, res) => {
-  try {
-    if (!validateUserData(req.body)) {
-      return res.status(400).json({ message: "Invalid user data" });
-    }
-
-    const { name, email, password } = req.body;
-
-    const existingUser = await usersCollection.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = {
-      name,
-      email,
-      password: hashedPassword,
-      uid: null,
-      photoURL: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      isAdmin: false,
-    };
-
-    const result = await usersCollection.insertOne(newUser);
-    const token = createToken(result.insertedId);
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    res.status(201).json({ user: { name, email } });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Login
-app.post("/api/users/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await usersCollection.findOne({ email });
-    if (!user) return res.status(400).json({ message: "Invalid credentials" });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(400).json({ message: "Invalid credentials" });
-
-    const token = createToken(user._id);
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    res.json({ user: { name: user.name, email: user.email } });
-  } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -322,7 +238,7 @@ app.post("/api/users/logout", (req, res) => {
   res.json({ message: "Logged out" });
 });
 
-// Add lost/found item (protected)
+// Add lost/found item (protected) 🆗
 app.post("/api/items", protect, async (req, res) => {
   try {
     if (!validateItemData(req.body)) {
@@ -349,8 +265,7 @@ app.post("/api/items", protect, async (req, res) => {
       date: new Date(date),
       contactName: req.user.name,
       contactEmail: req.user.email,
-      userId: new ObjectId(req.user._id),
-      status: "active",
+      status: "not-recovered",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -430,35 +345,22 @@ app.get("/api/items", async (req, res) => {
   }
 });
 
-// Get items by user (protected)
-app.get("/api/items/user/:userId", protect, async (req, res) => {
+// Update item (protected) 🆗
+app.patch("/api/items/:id", protect, async (req, res) => {
   try {
-    const items = await itemsCollection
-      .find({ userId: new ObjectId(req.params.userId) })
-      .sort({ createdAt: -1 })
-      .toArray();
-    res.json(items);
-  } catch (err) {
-    console.error("Error fetching user items:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-app.put("/api/items/:id", protect, async (req, res) => {
-  try {
-    let id = req.params.id;
+    let { id } = req.params;
 
     // Clean up ID if it has unexpected characters
-    id = id.split(":")[0].trim(); // Remove anything after colon
+    id = id.split(":")[0].trim();
 
     let item;
 
-    // First try as ObjectId
+    // Try finding by ObjectId
     if (ObjectId.isValid(id)) {
       item = await itemsCollection.findOne({ _id: new ObjectId(id) });
     }
 
-    // If not found, try as string ID
+    // If not found, try string ID
     if (!item) {
       item = await itemsCollection.findOne({ _id: id });
     }
@@ -467,38 +369,35 @@ app.put("/api/items/:id", protect, async (req, res) => {
       return res.status(404).json({ message: "Item not found" });
     }
 
-    // Check ownership
+    // Ownership check (skip in development for testing)
     if (
-      item.userId.toString() !== req.user._id.toString() &&
+      process.env.NODE_ENV !== "development" &&
       item.contactEmail !== req.user.email
     ) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    // Validate required fields
-    const requiredFields = [
+    // Prepare update (only allow fields you want to update)
+    const allowedFields = [
       "postType",
       "title",
       "description",
       "category",
       "location",
       "date",
+      "thumbnail",
       "status",
     ];
-    const missingFields = requiredFields.filter((field) => !req.body[field]);
-    if (missingFields.length > 0) {
-      return res.status(400).json({
-        message: "Missing required fields",
-        fields: missingFields,
-      });
-    }
 
-    // Prepare update
-    const updateData = {
-      ...req.body,
-      date: new Date(req.body.date),
-      updatedAt: new Date(),
-    };
+    const updateData = {};
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updateData[field] =
+          field === "date" ? new Date(req.body.date) : req.body[field];
+      }
+    });
+
+    updateData.updatedAt = new Date();
 
     const result = await itemsCollection.updateOne(
       { _id: item._id },
@@ -510,7 +409,7 @@ app.put("/api/items/:id", protect, async (req, res) => {
       modifiedCount: result.modifiedCount,
     });
   } catch (err) {
-    console.error("UPDATE ERROR:", {
+    console.error("PATCH ERROR:", {
       error: err.message,
       stack: err.stack,
       params: req.params,
@@ -524,7 +423,7 @@ app.put("/api/items/:id", protect, async (req, res) => {
   }
 });
 
-// Report item recovery (protected)
+// Report item recovery (protected) 🆗
 app.post("/api/items/:id/recover", protect, async (req, res) => {
   try {
     const id = req.params.id;
@@ -627,26 +526,42 @@ app.post("/api/items/:id/recover", protect, async (req, res) => {
   }
 });
 
-// Get recoveries for user (protected)
+// Get recoveries for user (protected) 🆗
 app.get("/api/recoveries", protect, async (req, res) => {
   try {
+    const userId = new ObjectId(req.user._id);
+    const userEmail = req.user.email;
+
     const recoveries = await recoveriesCollection
       .find({
         $or: [
-          { "recoveredBy.userId": new ObjectId(req.user._id) },
-          { originalOwner: req.user.email },
+          { "recoveredBy.userId": userId },
+          { "originalOwner.email": userEmail },
         ],
       })
       .sort({ createdAt: -1 })
       .toArray();
 
-    // Get item details for each recovery
+    // Attach original item data (fallback if not found)
     const recoveriesWithItems = await Promise.all(
       recoveries.map(async (recovery) => {
-        const item = await itemsCollection.findOne({
-          _id: new ObjectId(recovery.itemId),
-        });
-        return { ...recovery, item };
+        let item = null;
+        try {
+          // Try finding in itemsCollection
+          if (ObjectId.isValid(recovery.itemId)) {
+            item = await itemsCollection.findOne({
+              _id: new ObjectId(recovery.itemId),
+            });
+          }
+        } catch (err) {
+          console.warn("Item lookup failed:", err.message);
+        }
+
+        // If item not found, fallback to embedded original data
+        return {
+          ...recovery,
+          item: item || recovery.originalItemData || null,
+        };
       })
     );
 
@@ -657,22 +572,77 @@ app.get("/api/recoveries", protect, async (req, res) => {
   }
 });
 
-// Get items for the current user (protected)
-// Test this route
-app.get("/api/debug/my-items", protect, async (req, res) => {
-  // Test with hardcoded values that WORKED in your debug data
-  const testConditions = [
-    { userId: "68557943bd0d4d96d87d4525" }, // As string
-    { contactEmail: "mrshanshuvo@gmail.com" }, // Exact match
-  ];
+// Get items for the current user (protected) 🆗
+app.get("/api/my-items", protect, async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) return res.status(400).json({ message: "Email is required" });
 
-  const items = await itemsCollection.find({ $or: testConditions }).toArray();
+    const items = await itemsCollection
+      .find({ contactEmail: email })
+      .sort({ createdAt: -1 })
+      .toArray();
 
-  res.send({
-    conditionsUsed: testConditions,
-    itemsFound: items.length,
-    sampleItems: items,
-  });
+    res.json({
+      emailUsed: email,
+      itemsFound: items.length,
+      items,
+    });
+  } catch (err) {
+    console.error("Fetch my-items error:", err);
+    res.status(500).json({ message: "Server error fetching items" });
+  }
+});
+
+// Update recovery (protected)
+app.patch("/api/recoveries/:id", protect, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid recovery ID" });
+    }
+
+    // Only allow specific fields to be updated
+    const allowedFields = [
+      "recoveryStatus",
+      "notes",
+      "recoveredLocation",
+      "recoveredDate",
+    ];
+    const filteredData = Object.keys(updateData)
+      .filter((key) => allowedFields.includes(key))
+      .reduce((obj, key) => {
+        obj[key] = updateData[key];
+        return obj;
+      }, {});
+
+    if (Object.keys(filteredData).length === 0) {
+      return res.status(400).json({ message: "No valid fields to update" });
+    }
+
+    const result = await recoveriesCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: filteredData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "Recovery not found" });
+    }
+
+    const updatedRecovery = await recoveriesCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    res.status(200).json({
+      message: "Recovery updated successfully",
+      recovery: updatedRecovery,
+    });
+  } catch (err) {
+    console.error("Error updating recovery:", err);
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 // Delete item (protected)
