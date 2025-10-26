@@ -162,7 +162,7 @@ const createToken = (userIdOrUid, isUid = false) => {
 // === Routes ===
 
 // GET user info (protected) 🆗
-app.get("/api/users/profile", protect, async (req, res) => {
+app.get("/users/profile", protect, async (req, res) => {
   try {
     res.json({
       ...req.user,
@@ -174,7 +174,7 @@ app.get("/api/users/profile", protect, async (req, res) => {
 });
 
 // Firebase login 🆗
-app.post("/api/users/firebase-login", async (req, res) => {
+app.post("/users/firebase-login", async (req, res) => {
   const { idToken, name, photoURL } = req.body;
 
   if (!idToken)
@@ -237,7 +237,7 @@ app.post("/api/users/firebase-login", async (req, res) => {
 });
 
 // Logout 🆗
-app.post("/api/users/logout", (req, res) => {
+app.post("/users/logout", (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -247,7 +247,7 @@ app.post("/api/users/logout", (req, res) => {
 });
 
 // Add lost/found item (protected) 🆗
-app.post("/api/inventory", protect, async (req, res) => {
+app.post("/inventory", protect, async (req, res) => {
   try {
     if (!validateItemData(req.body)) {
       return res.status(400).json({ message: "Invalid item data" });
@@ -289,7 +289,7 @@ app.post("/api/inventory", protect, async (req, res) => {
 });
 
 // Get single item (public) 🆗
-app.get("/api/inventory/:id", async (req, res) => {
+app.get("/inventory/:id", async (req, res) => {
   try {
     const id = req.params.id;
     let item;
@@ -314,7 +314,7 @@ app.get("/api/inventory/:id", async (req, res) => {
 });
 
 // Get all items with filters (public) 🆗
-app.get("/api/inventory", async (req, res) => {
+app.get("/inventory", async (req, res) => {
   try {
     const { type, status, category, location, search } = req.query;
     const query = {};
@@ -354,7 +354,7 @@ app.get("/api/inventory", async (req, res) => {
 });
 
 // GET API Endpoints for Banner Slides (public)
-app.get("/api/highlights", async (req, res) => {
+app.get("/highlights", async (req, res) => {
   try {
     const slides = await slidesCollection.find().toArray();
     res.json(slides);
@@ -365,7 +365,7 @@ app.get("/api/highlights", async (req, res) => {
 });
 
 // Update item (protected) 🆗
-app.patch("/api/inventory/:id", protect, async (req, res) => {
+app.patch("/inventory/:id", protect, async (req, res) => {
   try {
     let { id } = req.params;
 
@@ -443,7 +443,7 @@ app.patch("/api/inventory/:id", protect, async (req, res) => {
 });
 
 // Report item recovery (protected) 🆗
-app.post("/api/inventory/:id/recover", protect, async (req, res) => {
+app.post("/inventory/:id/recover", protect, async (req, res) => {
   try {
     const id = req.params.id;
     let item;
@@ -546,7 +546,7 @@ app.post("/api/inventory/:id/recover", protect, async (req, res) => {
 });
 
 // Get recoveries for user (protected) 🆗
-app.get("/api/recoveries", protect, async (req, res) => {
+app.get("/recoveries", protect, async (req, res) => {
   try {
     const userId = new ObjectId(req.user._id);
     const userEmail = req.user.email;
@@ -592,7 +592,7 @@ app.get("/api/recoveries", protect, async (req, res) => {
 });
 
 // Get items for the current user (protected) 🆗
-app.get("/api/my-items", protect, async (req, res) => {
+app.get("/my-items", protect, async (req, res) => {
   try {
     const email = req.query.email;
     if (!email) return res.status(400).json({ message: "Email is required" });
@@ -614,7 +614,7 @@ app.get("/api/my-items", protect, async (req, res) => {
 });
 
 // Update recovery (protected) 🆗
-app.patch("/api/recoveries/:id", protect, async (req, res) => {
+app.patch("/recoveries/:id", protect, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -665,7 +665,7 @@ app.patch("/api/recoveries/:id", protect, async (req, res) => {
 });
 
 // Delete item (protected) 🆗
-app.delete("/api/inventory/:id", protect, async (req, res) => {
+app.delete("/inventory/:id", protect, async (req, res) => {
   try {
     const id = req.params.id;
     let item;
