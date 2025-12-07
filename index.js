@@ -10,14 +10,22 @@ require("dotenv").config();
 const app = express();
 
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017";
-const JWT_SECRET = process.env.JWT_SECRET || "yourSuperSecretKey";
+const MONGO_URI = process.env.MONGO_URI;
+const JWT_SECRET = process.env.JWT_SECRET;
 
-const serviceAccount = require("./firebase-service-account.json");
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+// --------------------
+// FIXED FIREBASE ADMIN
+// --------------------
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      type: process.env.FIREBASE_TYPE,
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    }),
+  });
+}
 
 // Middleware
 app.use(
