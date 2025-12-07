@@ -719,7 +719,7 @@ app.delete("/inventory/:id", protect, async (req, res) => {
 
 // Root route
 app.get("/", (req, res) => {
-  res.send("WhereIsIt backend server running");
+  res.send("WhereIsIt backend server running!!");
 });
 
 // Start server
