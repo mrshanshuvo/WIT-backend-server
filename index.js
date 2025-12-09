@@ -33,6 +33,7 @@ app.use(
     origin: [
       "https://simple-firebase-auth-9089a.web.app",
       "http://localhost:5173",
+      "https://wit-web-client.vercel.app",
     ],
     credentials: true,
   })
