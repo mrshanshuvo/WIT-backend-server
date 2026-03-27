@@ -47,7 +47,10 @@ let db,
   usersCollection,
   itemsCollection,
   recoveriesCollection,
-  slidesCollection;
+  slidesCollection,
+  blogsCollection,
+  contactCollection,
+  faqsCollection;
 
 async function connectDB() {
   // Database
@@ -58,6 +61,127 @@ async function connectDB() {
   itemsCollection = db.collection("items");
   recoveriesCollection = db.collection("recoveries");
   slidesCollection = db.collection("slides");
+  blogsCollection = db.collection("blogs");
+  contactCollection = db.collection("contactInfo");
+  faqsCollection = db.collection("faqs");
+
+  // Optional Seeding of Dummy Data (blogs and contact)
+  const faqsCount = await faqsCollection.countDocuments();
+  if (faqsCount === 0) {
+    await faqsCollection.insertMany([
+      {
+        id: "report-lost",
+        question: "How do I report a lost item?",
+        answer: "Simply click on 'Report Lost Item' from your dashboard, fill in the item details including photos, description, location, and category. Your item will be instantly visible to our community of helpers.",
+        category: "Reporting"
+      },
+      {
+        id: "mark-found",
+        question: "How can I mark an item as found?",
+        answer: "Go to your dashboard, select the 'Found Items' section, and click 'Report Found Item'. Provide as much detail as possible to help identify the rightful owner quickly.",
+        category: "Reporting"
+      },
+      {
+        id: "contact-direct",
+        question: "Can I contact the finder/owner directly?",
+        answer: "Yes! Once a match is made, our secure messaging system allows you to communicate directly while protecting your personal information until you're ready to share contact details.",
+        category: "Communication"
+      },
+      {
+        id: "item-categories",
+        question: "How are items categorized?",
+        answer: "Items are organized into intuitive categories: Electronics, Documents, Jewelry, Clothing, Bags & Wallets, Keys, Books, and Other. This helps users quickly find what they're looking for.",
+        category: "Organization"
+      },
+      {
+        id: "personal-info-safe",
+        question: "Is my personal information safe?",
+        answer: "Absolutely. We use end-to-end encryption and never share your email or phone number publicly. Contact information is only shared with relevant parties after mutual agreement.",
+        category: "Privacy"
+      },
+      {
+        id: "match-notifications",
+        question: "How quickly will I be notified of matches?",
+        answer: "Our AI-powered matching system sends instant notifications when potential matches are found. Most users receive their first match within hours of posting.",
+        category: "Notifications"
+      },
+      {
+        id: "valuable-items",
+        question: "What if my item is valuable or sensitive?",
+        answer: "For valuable items, we recommend using our secure handoff locations and verification process. For sensitive documents, we have special protocols to ensure safe return.",
+        category: "Safety"
+      },
+      {
+        id: "service-fees",
+        question: "Is there a fee for using WhereIsIt?",
+        answer: "Basic services are completely free! We offer premium features like enhanced visibility and business solutions for a small fee, but reuniting lost items will always be free.",
+        category: "Pricing"
+      }
+    ]);
+  }
+
+  const contactCount = await contactCollection.countDocuments();
+  if (contactCount === 0) {
+    await contactCollection.insertOne({
+      email: "support@lostfound.com",
+      phone: "+880123456789",
+      address: "123 Green Street, Dhaka, Bangladesh",
+      workingHours: "Mon-Fri 9:00 AM - 6:00 PM",
+      facebook: "https://facebook.com/lostfound",
+      twitter: "https://twitter.com/lostfound",
+      instagram: "https://instagram.com/lostfound"
+    });
+  }
+
+  const blogsCount = await blogsCollection.countDocuments();
+  if (blogsCount === 0) {
+    await blogsCollection.insertMany([
+      {
+        id: 1,
+        title: "5 Tips to Keep Your Belongings Safe",
+        date: "2025-10-26",
+        author: "John Doe",
+        category: "Safety",
+        excerpt: "Learn practical steps to protect your valuables and avoid loss...",
+        image: "https://images.unsplash.com/photo-1600180758895-9d5935e0a5d3",
+        likes: 23,
+        comments: 5
+      },
+      {
+        id: 2,
+        title: "What to Do if You Lose an Important Item",
+        date: "2025-10-20",
+        author: "Jane Smith",
+        category: "Recovery",
+        excerpt: "Follow these steps to increase the chances of recovering lost items...",
+        image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2",
+        likes: 15,
+        comments: 3
+      },
+      {
+        id: 3,
+        title: "Top 10 Most Common Lost Items",
+        date: "2025-10-15",
+        author: "Alice Johnson",
+        category: "Insights",
+        excerpt: "From keys to wallets, here are the items people lose most often...",
+        image: "https://images.unsplash.com/photo-1591622770800-60117e2d6828",
+        likes: 30,
+        comments: 8
+      },
+      {
+        id: 4,
+        title: "How Technology Helps in Finding Lost Items",
+        date: "2025-10-10",
+        author: "Michael Brown",
+        category: "Technology",
+        excerpt: "Discover how apps and tracking devices improve recovery chances...",
+        image: "https://images.unsplash.com/photo-1600180758895-0f5f1c5b20a2",
+        likes: 42,
+        comments: 12
+      }
+    ]);
+  }
 
   // Connection test
   console.log("MongoDB connected (native driver)");
@@ -369,6 +493,63 @@ app.get("/highlights", async (req, res) => {
     res.json(slides);
   } catch (err) {
     console.error("Error fetching slides:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET Blogs (public)
+app.get("/blogs", async (req, res) => {
+  try {
+    const blogs = await blogsCollection.find().sort({ date: -1 }).toArray();
+    res.json(blogs);
+  } catch (err) {
+    console.error("Error fetching blogs:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET App Stats (public)
+app.get("/stats", async (req, res) => {
+  try {
+    const totalItems = await itemsCollection.countDocuments();
+    const itemsRecovered = await itemsCollection.countDocuments({ status: "recovered" });
+    const usersCount = await usersCollection.countDocuments();
+
+    let successRateNum = 0;
+    if (totalItems > 0) {
+      successRateNum = Math.round((itemsRecovered / totalItems) * 100);
+    }
+
+    res.json({
+      totalItems,
+      itemsRecovered,
+      usersCount,
+      successRate: successRateNum,
+    });
+  } catch (err) {
+    console.error("Error fetching stats:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET Contact Info (public)
+app.get("/contact-info", async (req, res) => {
+  try {
+    const info = await contactCollection.findOne({});
+    res.json(info || {});
+  } catch (err) {
+    console.error("Error fetching contact info:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET FAQs (public)
+app.get("/faqs", async (req, res) => {
+  try {
+    const faqs = await faqsCollection.find().toArray();
+    res.json(faqs);
+  } catch (err) {
+    console.error("Error fetching faqs:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
