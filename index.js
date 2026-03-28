@@ -13,6 +13,17 @@ const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Environment Validation
+if (!JWT_SECRET) {
+  console.error("CRITICAL ERROR: JWT_SECRET is not defined in .env file.");
+  process.exit(1);
+}
+
+if (!MONGO_URI) {
+  console.error("CRITICAL ERROR: MONGO_URI is not defined in .env file.");
+  process.exit(1);
+}
+
 // --------------------
 // FIXED FIREBASE ADMIN
 // --------------------
@@ -245,6 +256,17 @@ const protect = async (req, res, next) => {
         };
         const result = await usersCollection.insertOne(newUser);
         user = { ...newUser, _id: result.insertedId };
+      } else {
+        // Simple profile sync if missing data
+        const syncUpdate = {};
+        if (!user.photoURL && decoded.picture) syncUpdate.photoURL = decoded.picture;
+        if ((!user.name || user.name === "Firebase User") && decoded.name) syncUpdate.name = decoded.name;
+
+        if (Object.keys(syncUpdate).length > 0) {
+          syncUpdate.updatedAt = new Date();
+          await usersCollection.updateOne({ _id: user._id }, { $set: syncUpdate });
+          user = { ...user, ...syncUpdate };
+        }
       }
 
       req.user = user;
@@ -302,6 +324,22 @@ app.get("/users/profile", protect, async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching profile:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+ 
+// Check if email already exists (public) 🆗
+app.get("/users/check-email", async (req, res) => {
+  const { email } = req.query;
+  if (!email) {
+    return res.status(400).json({ message: "Email parameter is required" });
+  }
+
+  try {
+    const user = await usersCollection.findOne({ email });
+    res.json({ exists: !!user });
+  } catch (err) {
+    console.error("Error checking email:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
